@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Summer Dealer Conclave Frame Generator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f4;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            text-align: center;
+        }
+
+        h1 { color: #333; }
+        p { color: #666; margin-bottom: 20px; }
+
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-width: 90%;
+        }
+
+        /* Hide the actual file input and style the label */
+        input[type="file"] {
+            display: none;
+        }
+
+        .custom-file-upload {
+            border: 2px dashed #ccc;
+            display: inline-block;
+            padding: 12px 24px;
+            cursor: pointer;
+            border-radius: 5px;
+            background-color: #fafafa;
+            transition: all 0.3s;
+            margin-bottom: 20px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .custom-file-upload:hover {
+            background-color: #e9e9e9;
+            border-color: #999;
+        }
+
+        canvas {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ddd;
+            margin-top: 10px;
+            display: block; /* Hidden initially until loaded */
+        }
+
+        .download-btn {
+            display: none; /* Hidden until image is ready */
+            margin-top: 20px;
+            padding: 15px 30px;
+            background-color: #e31e24; /* Matching the red in your logo */
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 1.1em;
+            cursor: pointer;
+        }
+
+        .download-btn:hover {
+            background-color: #c41217;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Photo Frame Generator</h1>
+        <p>Upload your photo to add the Summer Dealer Conclave frame!</p>
+
+        <label for="file-upload" class="custom-file-upload">
+            📂 Click to Upload Photo
+        </label>
+        <input id="file-upload" type="file" accept="image/*" />
+
+        <canvas id="canvas"></canvas>
+
+        <a id="download-link" class="download-btn">Download Image</a>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-upload');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const downloadLink = document.getElementById('download-link');
+
+        // 1. CONFIGURATION: The path to your frame image
+        // Make sure this file is in the same folder as this index.html
+        const frameSrc = './frame.png'; 
+        
+        let frameImg = new Image();
+        frameImg.src = frameSrc;
+
+        // Ensure frame loads before allowing operations
+        frameImg.onload = function() {
+            // Set canvas size to match the frame resolution
+            canvas.width = frameImg.width;
+            canvas.height = frameImg.height;
+            
+            // Draw just the frame initially as a preview
+            ctx.drawImage(frameImg, 0, 0);
+        };
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            
+            reader.onload = function(event) {
+                const userImg = new Image();
+                userImg.onload = function() {
+                    // CLEAR CANVAS
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    // LOGIC: Scale and Center "Object-Fit: Cover"
+                    // We want the user image to fill the background behind the frame
+                    const scale = Math.max(canvas.width / userImg.width, canvas.height / userImg.height);
+                    const x = (canvas.width / 2) - (userImg.width / 2) * scale;
+                    const y = (canvas.height / 2) - (userImg.height / 2) * scale;
+
+                    // 1. Draw User Image
+                    ctx.drawImage(userImg, x, y, userImg.width * scale, userImg.height * scale);
+
+                    // 2. Draw Frame on Top
+                    ctx.drawImage(frameImg, 0, 0);
+
+                    // 3. Show Download Button
+                    downloadLink.href = canvas.toDataURL('image/png');
+                    downloadLink.download = 'my-framed-photo.png';
+                    downloadLink.style.display = 'inline-block';
+                    downloadLink.textContent = 'Download Image';
+                }
+                userImg.src = event.target.result;
+            }
+            reader.readAsDataURL(file);
+        });
+    </script>
+</body>
+</html>
