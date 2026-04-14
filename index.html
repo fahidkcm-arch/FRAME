@@ -97,7 +97,7 @@
 
         canvas {
             max-width: 100%;
-            max-height: 55vh; /* Prevents canvas from becoming too tall */
+            max-height: 55vh; 
             object-fit: contain;
             border-radius: 4px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
@@ -115,7 +115,7 @@
             display: none; 
         }
 
-        /* Thumbnail Gallery (Optimized Layout) */
+        /* Thumbnail Gallery */
         .thumbnail-gallery {
             display: flex;
             flex-wrap: wrap; 
@@ -228,7 +228,6 @@
                 <canvas id="canvas" style="display: none;"></canvas>
                 <p id="helper-text" class="helper-text">🖱️ Click and drag the image to reposition it</p>
             </div>
-
             <div id="thumbnail-gallery" class="thumbnail-gallery"></div>
         </div>
     </div>
@@ -264,7 +263,7 @@
             drawCanvas();
         };
 
-        // 1. Handle Custom Frame Upload
+        // Custom Frame Upload
         frameInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -282,7 +281,7 @@
             reader.readAsDataURL(file);
         });
 
-        // 2. Handle Background Image(s) Upload (LAZY LOADING)
+        // Background Image(s) Upload (Initialization only)
         bgInput.addEventListener('change', (e) => {
             const files = Array.from(e.target.files);
             if (files.length === 0) return;
@@ -300,10 +299,13 @@
             files.forEach((file, index) => {
                 const imgUrl = URL.createObjectURL(file);
 
+                // Initialize item data structure
                 const itemData = {
                     file: file,
                     imgUrl: imgUrl, 
-                    img: null, 
+                    previewImg: null, // Holds the fast, low-res proxy
+                    originalWidth: 0, // Critical for keeping math accurate
+                    originalHeight: 0,
                     originalName: file.name,
                     offsetX: 0,
                     offsetY: 0,
@@ -323,7 +325,7 @@
             if (files.length > 0) selectImage(0);
         });
 
-        // Select an image from thumbnails
+        // Select an image (Generates Low-Res Proxy for Fast UI)
         function selectImage(index) {
             currentIndex = index;
             
@@ -333,14 +335,38 @@
             const currentItem = imageItems[currentIndex];
             zoomSlider.value = currentItem.scale;
 
-            // Load full image only if not already loaded
-            if (!currentItem.img) {
-                const newImg = new Image();
-                newImg.onload = () => {
-                    currentItem.img = newImg;
-                    drawCanvas();
+            // Generate proxy if it doesn't exist
+            if (!currentItem.previewImg) {
+                const tempImg = new Image();
+                tempImg.onload = () => {
+                    // Save original dimensions for exact math later
+                    currentItem.originalWidth = tempImg.width;
+                    currentItem.originalHeight = tempImg.height;
+                    
+                    // Generate a low-resolution version for the canvas (Max 800px)
+                    const maxDim = 800; 
+                    let w = tempImg.width;
+                    let h = tempImg.height;
+                    if (w > maxDim || h > maxDim) {
+                        const ratio = Math.min(maxDim / w, maxDim / h);
+                        w *= ratio;
+                        h *= ratio;
+                    }
+                    
+                    const proxyCanvas = document.createElement('canvas');
+                    proxyCanvas.width = w;
+                    proxyCanvas.height = h;
+                    const proxyCtx = proxyCanvas.getContext('2d');
+                    proxyCtx.drawImage(tempImg, 0, 0, w, h);
+                    
+                    const pImg = new Image();
+                    pImg.onload = () => {
+                        currentItem.previewImg = pImg; // Save the fast proxy
+                        drawCanvas();
+                    };
+                    pImg.src = proxyCanvas.toDataURL('image/jpeg', 0.7); // Low quality fast decode
                 };
-                newImg.src = currentItem.imgUrl;
+                tempImg.src = currentItem.imgUrl;
             } else {
                 drawCanvas(); 
             }
@@ -368,7 +394,7 @@
         window.addEventListener('touchend', endDrag);
 
         function startDrag(e) {
-            if (currentIndex === -1 || !imageItems[currentIndex].img) return;
+            if (currentIndex === -1 || !imageItems[currentIndex].previewImg) return;
             isDragging = true;
             
             const rect = canvas.getBoundingClientRect();
@@ -398,8 +424,8 @@
             isDragging = false;
         }
 
-        // --- DRAWING ENGINE ---
-        function drawCanvas(targetCanvas = canvas, targetIndex = currentIndex) {
+        // --- DRAWING ENGINE (Supports Proxy and High-Res Override) ---
+        function drawCanvas(targetCanvas = canvas, targetIndex = currentIndex, highResOverride = null) {
             if (!frameImg.width || targetIndex === -1 || !imageItems[targetIndex]) return;
             
             const context = targetCanvas.getContext('2d');
@@ -407,16 +433,19 @@
             const ch = targetCanvas.height;
             const fitMode = fitModeSelect.value;
             const item = imageItems[targetIndex];
-            const bgImg = item.img;
+            
+            // Use the high res image if provided (for downloading), otherwise use the fast proxy
+            const bgImg = highResOverride || item.previewImg;
 
-            // Clear & Fill White Background (Crucial for JPEG)
+            // Clear & Fill White Background
             context.clearRect(0, 0, cw, ch);
             context.fillStyle = "#ffffff";
             context.fillRect(0, 0, cw, ch);
             
-            if (bgImg && bgImg.width) {
-                const iw = bgImg.width;
-                const ih = bgImg.height;
+            if (bgImg && item.originalWidth) {
+                // CRITICAL: Always calculate using the original full-size dimensions!
+                const iw = item.originalWidth;
+                const ih = item.originalHeight;
                 let baseScale = 1;
 
                 if (fitMode === 'cover') {
@@ -448,6 +477,7 @@
                 x += item.offsetX;
                 y += item.offsetY;
 
+                // Draw the active image (Proxy for UI, High-Res for final export)
                 context.drawImage(bgImg, x, y, drawWidth, drawHeight);
             }
 
@@ -455,22 +485,45 @@
             context.drawImage(frameImg, 0, 0, cw, ch);
         }
 
-        // --- DOWNLOADING ---
-        btnDownload.addEventListener('click', () => {
-            if (currentIndex === -1 || !imageItems[currentIndex].img) return;
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.90); 
+        // --- DOWNLOADING (Uses Original High-Res Files) ---
+        
+        btnDownload.addEventListener('click', async () => {
+            if (currentIndex === -1) return;
+            const item = imageItems[currentIndex];
+            
+            statusMsg.textContent = "Processing High-Quality Image...";
+            btnDownload.disabled = true;
+
+            // 1. Secretly load the heavy high-res original image
+            const highResImg = await new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.src = item.imgUrl;
+            });
+
+            // 2. Draw it to a hidden canvas
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = frameImg.width;
+            offCanvas.height = frameImg.height;
+            drawCanvas(offCanvas, currentIndex, highResImg);
+
+            // 3. Export as high quality JPEG
+            const dataUrl = offCanvas.toDataURL('image/jpeg', 0.95); 
             const link = document.createElement('a');
-            const ogName = imageItems[currentIndex].originalName.split('.')[0];
+            const ogName = item.originalName.split('.')[0];
             link.download = `framed-${ogName}.jpg`;
             link.href = dataUrl;
             link.click();
+
+            statusMsg.textContent = "";
+            btnDownload.disabled = false;
         });
 
         // Download All (ZIP)
         btnDownloadAll.addEventListener('click', async () => {
             if (imageItems.length === 0) return;
             
-            statusMsg.textContent = "Processing images... please wait.";
+            statusMsg.textContent = "Processing high-res images... please wait.";
             btnDownloadAll.disabled = true;
             btnDownload.disabled = true;
 
@@ -482,22 +535,24 @@
             offCanvas.height = frameImg.height;
 
             for (let i = 0; i < imageItems.length; i++) {
-                statusMsg.textContent = `Rendering image ${i + 1} of ${imageItems.length}...`;
+                statusMsg.textContent = `Rendering High-Res image ${i + 1} of ${imageItems.length}...`;
                 
-                // Load right before drawing if not already loaded by user
-                if (!imageItems[i].img) {
-                    const tempImg = await new Promise((resolve) => {
-                        const img = new Image();
-                        img.onload = () => resolve(img);
-                        img.src = imageItems[i].imgUrl;
-                    });
-                    imageItems[i].img = tempImg;
+                // Fetch high-res original
+                const highResImg = await new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.src = imageItems[i].imgUrl;
+                });
+
+                // Safety check: if user never clicked thumbnail, ensure we have original dimensions
+                if (!imageItems[i].originalWidth) {
+                    imageItems[i].originalWidth = highResImg.width;
+                    imageItems[i].originalHeight = highResImg.height;
                 }
 
-                drawCanvas(offCanvas, i);
+                drawCanvas(offCanvas, i, highResImg);
 
-                const blob = await new Promise(resolve => offCanvas.toBlob(resolve, 'image/jpeg', 0.90));
-                
+                const blob = await new Promise(resolve => offCanvas.toBlob(resolve, 'image/jpeg', 0.95));
                 const originalName = imageItems[i].originalName.split('.')[0];
                 imgFolder.file(`framed_${originalName}.jpg`, blob);
             }
