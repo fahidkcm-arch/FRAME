@@ -1,184 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro Frame Generator | Summer Dealer Conclave</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <style>
-        :root {
-            --primary: #e31e24;
-            --primary-hover: #c41217;
-            --bg-color: #f0f2f5;
-            --card-bg: #ffffff;
-            --text-main: #333333;
-            --text-muted: #666666;
-            --border-color: #e1e4e8;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            padding: 2rem 1rem;
-            display: flex;
-            justify-content: center;
-        }
-
-        .dashboard {
-            display: grid;
-            grid-template-columns: 350px 1fr;
-            gap: 2rem;
-            max-width: 1200px;
-            width: 100%;
-        }
-
-        .panel {
-            background: var(--card-bg);
-            padding: 2rem;
-            border-radius: 16px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
-        }
-
-        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--text-main); }
-        p.subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
-
-        h3 { font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem; }
-
-        /* Custom File Uploads */
-        input[type="file"] { display: none; }
-        
-        .upload-area {
-            border: 2px dashed var(--border-color);
-            border-radius: 8px;
-            padding: 1.5rem 1rem;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            margin-bottom: 1.5rem;
-            background: #fafbfc;
-            display: block;
-        }
-        .upload-area:hover { border-color: var(--primary); background: #fdf2f2; }
-        .upload-area span { display: block; font-weight: 600; color: var(--text-main); margin-top: 0.5rem; }
-        .upload-area small { color: var(--text-muted); font-size: 0.8rem; }
-
-        /* Styling Options */
-        .options-group { margin-bottom: 1.5rem; }
-        .options-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; }
-        select {
-            width: 100%;
-            padding: 0.8rem;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            font-size: 1rem;
-            background: white;
-            cursor: pointer;
-        }
-
-        /* Preview Area */
-        .preview-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: #e9ecef;
-            border-radius: 8px;
-            padding: 1rem;
-            min-height: 400px;
-            overflow: hidden;
-        }
-
-        canvas {
-            max-width: 100%;
-            max-height: 600px;
-            object-fit: contain;
-            border-radius: 4px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
-        /* Buttons */
-        .btn-group { display: flex; gap: 1rem; margin-top: 1.5rem; }
-        .btn {
-            flex: 1;
-            padding: 1rem;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.2s;
-            text-align: center;
-        }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
-
-        /* Status & Logs */
-        #status-message {
-            margin-top: 1rem;
-            font-size: 0.9rem;
-            color: var(--primary);
-            font-weight: bold;
-            text-align: center;
-        }
-
-        @media (max-width: 800px) {
-            .dashboard { grid-template-columns: 1fr; }
-        }
-    </style>
-</head>
-<body>
-
-    <div class="dashboard">
-        <div class="panel">
-            <h1>Frame Generator</h1>
-            <p class="subtitle">Upload, adjust, and bulk-download your framed photos.</p>
-
-            <h3>1. Setup Frame</h3>
-            <label class="upload-area">
-                <input type="file" id="frame-upload" accept="image/png, image/webp">
-                🖼️ <span>Upload Custom Frame</span>
-                <small>Transparent PNG recommended</small>
-            </label>
-
-            <h3>2. Setup Photos</h3>
-            <label class="upload-area">
-                <input type="file" id="bg-upload" accept="image/*" multiple>
-                📸 <span>Upload Background Photo(s)</span>
-                <small>Select one or multiple images</small>
-            </label>
-            <p id="file-count" style="text-align: center; font-size: 0.85rem; color: #666; margin-top: -10px; margin-bottom: 15px;"></p>
-
-            <h3>3. Positioning</h3>
-            <div class="options-group">
-                <label for="fit-mode">Background Image Fit</label>
-                <select id="fit-mode">
-                    <option value="cover">Fill (Crop excess to fill frame)</option>
-                    <option value="contain">Fit (Show whole image, may have borders)</option>
-                    <option value="stretch">Stretch (Ignore proportions)</option>
-                </select>
-            </div>
-
-            <div class="btn-group">
-                <button id="btn-download" class="btn btn-primary" disabled>⬇️ Download Current</button>
-                <button id="btn-download-all" class="btn btn-primary" style="display: none;">📦 Download All (ZIP)</button>
-            </div>
-            <div id="status-message"></div>
-        </div>
-
-        <div class="panel">
-            <div class="preview-container">
-                <canvas id="canvas"></canvas>
-                <p id="preview-placeholder" style="color: #888;">Preview will appear here</p>
-            </div>
-        </div>
-    </div>
-
-    <script>
+<script>
         const frameInput = document.getElementById('frame-upload');
         const bgInput = document.getElementById('bg-upload');
         const fitModeSelect = document.getElementById('fit-mode');
@@ -265,8 +85,10 @@
             const ch = targetCanvas.height;
             const fitMode = fitModeSelect.value;
 
-            // Clear canvas
+            // Clear canvas and fill with a white background for JPEG compatibility
             context.clearRect(0, 0, cw, ch);
+            context.fillStyle = "#ffffff";
+            context.fillRect(0, 0, cw, ch);
             
             // Draw background if exists
             if (bgImageToDraw) {
@@ -296,17 +118,16 @@
             context.drawImage(frameImg, 0, 0, cw, ch);
         }
 
-        // Download Single
+        // Download Single (Now JPEG at 90% quality)
         btnDownload.addEventListener('click', () => {
-            // Using WebP and 0.85 quality for smaller file size but high quality
-            const dataUrl = canvas.toDataURL('image/webp', 0.85); 
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.90); 
             const link = document.createElement('a');
-            link.download = `framed-${bgFiles[0]?.name.split('.')[0] || 'photo'}.webp`;
+            link.download = `framed-${bgFiles[0]?.name.split('.')[0] || 'photo'}.jpg`;
             link.href = dataUrl;
             link.click();
         });
 
-        // Download All (Bulk Zip Generation)
+        // Download All (Bulk Zip Generation - Now JPEG at 90% quality)
         btnDownloadAll.addEventListener('click', async () => {
             statusMsg.textContent = "Processing images... please wait.";
             btnDownloadAll.disabled = true;
@@ -337,12 +158,12 @@
                 // Draw to offscreen canvas
                 drawCanvas(img, offScreenCanvas);
 
-                // Convert canvas to Blob (WebP format for optimized size)
-                const blob = await new Promise(resolve => offScreenCanvas.toBlob(resolve, 'image/webp', 0.85));
+                // Convert canvas to Blob (JPEG format)
+                const blob = await new Promise(resolve => offScreenCanvas.toBlob(resolve, 'image/jpeg', 0.90));
                 
                 // Add to zip
                 const originalName = bgFiles[i].name.split('.')[0];
-                imgFolder.file(`framed_${originalName}.webp`, blob);
+                imgFolder.file(`framed_${originalName}.jpg`, blob);
             }
 
             statusMsg.textContent = "Zipping files... almost done!";
@@ -358,5 +179,3 @@
             });
         });
     </script>
-</body>
-</html>
