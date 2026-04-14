@@ -1,18 +1,261 @@
-<script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro Frame Generator | Summer Dealer Conclave</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <style>
+        :root {
+            --primary: #e31e24;
+            --primary-hover: #c41217;
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-main: #333333;
+            --text-muted: #666666;
+            --border-color: #e1e4e8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 2rem 1rem;
+            display: flex;
+            justify-content: center;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 2rem;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .panel {
+            background: var(--card-bg);
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+
+        h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--text-main); }
+        p.subtitle { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 2rem; }
+        h3 { font-size: 1.1rem; margin-bottom: 1rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem; }
+
+        /* Custom File Uploads */
+        input[type="file"] { display: none; }
+        .upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 1.5rem;
+            background: #fafbfc;
+            display: block;
+        }
+        .upload-area:hover { border-color: var(--primary); background: #fdf2f2; }
+        .upload-area span { display: block; font-weight: 600; color: var(--text-main); margin-top: 0.5rem; }
+        .upload-area small { color: var(--text-muted); font-size: 0.8rem; }
+
+        /* Styling Options */
+        .options-group { margin-bottom: 1.5rem; }
+        .options-group label { display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem; }
+        select {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+        }
+
+        /* Range Slider */
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+            accent-color: var(--primary);
+        }
+
+        /* Preview Area */
+        .preview-container {
+            display: flex;
+            flex-direction: column;
+            background: #e9ecef;
+            border-radius: 8px;
+            padding: 1rem;
+            overflow: hidden;
+            position: relative;
+        }
+
+        canvas {
+            max-width: 100%;
+            max-height: 600px;
+            object-fit: contain;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            cursor: grab; /* Indicates image can be dragged */
+            margin: 0 auto;
+            display: block;
+        }
+        canvas:active { cursor: grabbing; }
+
+        .helper-text {
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 10px;
+            display: none; /* Shown via JS when active */
+        }
+
+        /* Thumbnail Gallery */
+        .thumbnail-gallery {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 10px 5px;
+            margin-top: 15px;
+        }
+        
+        .thumbnail {
+            width: 70px;
+            height: 70px;
+            object-fit: cover;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 3px solid transparent;
+            opacity: 0.6;
+            transition: all 0.2s;
+            flex-shrink: 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .thumbnail:hover { opacity: 1; }
+        .thumbnail.active {
+            border-color: var(--primary);
+            opacity: 1;
+            transform: scale(1.05);
+        }
+
+        /* Buttons */
+        .btn-group { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; }
+        .btn {
+            padding: 1rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-align: center;
+        }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-secondary { background: #333; color: white; }
+        .btn-secondary:hover { background: #111; }
+
+        #status-message {
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            color: var(--primary);
+            font-weight: bold;
+            text-align: center;
+        }
+
+        @media (max-width: 800px) {
+            .dashboard { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <div class="panel">
+            <h1>Frame Generator</h1>
+            <p class="subtitle">Upload, adjust, and bulk-download your framed photos.</p>
+
+            <h3>1. Setup Frame</h3>
+            <label class="upload-area">
+                <input type="file" id="frame-upload" accept="image/png, image/webp">
+                🖼️ <span>Upload Custom Frame</span>
+                <small>Transparent PNG recommended</small>
+            </label>
+
+            <h3>2. Setup Photos</h3>
+            <label class="upload-area">
+                <input type="file" id="bg-upload" accept="image/*" multiple>
+                📸 <span>Upload Background Photo(s)</span>
+                <small>Select one or multiple images</small>
+            </label>
+            <p id="file-count" style="text-align: center; font-size: 0.85rem; color: #666; margin-top: -10px; margin-bottom: 15px;"></p>
+
+            <h3>3. Positioning</h3>
+            <div class="options-group">
+                <label for="fit-mode">Background Image Fit</label>
+                <select id="fit-mode">
+                    <option value="cover">Fill (Crop excess to fill frame)</option>
+                    <option value="contain">Fit (Show whole image)</option>
+                    <option value="stretch">Stretch (Ignore proportions)</option>
+                </select>
+            </div>
+
+            <div class="options-group">
+                <label for="zoom-slider">Zoom / Scale</label>
+                <input type="range" id="zoom-slider" min="0.1" max="3" step="0.01" value="1">
+            </div>
+
+            <div class="btn-group">
+                <button id="btn-download" class="btn btn-primary" disabled>⬇️ Download Current Image</button>
+                <button id="btn-download-all" class="btn btn-secondary" style="display: none;">📦 Download ALL Images (ZIP)</button>
+            </div>
+            <div id="status-message"></div>
+        </div>
+
+        <div class="panel">
+            <div class="preview-container">
+                <p id="preview-placeholder" style="color: #888; text-align: center; margin: 40px 0;">Preview will appear here</p>
+                <canvas id="canvas" style="display: none;"></canvas>
+                <p id="helper-text" class="helper-text">🖱️ Click and drag the image to reposition it</p>
+            </div>
+
+            <div id="thumbnail-gallery" class="thumbnail-gallery"></div>
+        </div>
+    </div>
+
+    <script>
         const frameInput = document.getElementById('frame-upload');
         const bgInput = document.getElementById('bg-upload');
         const fitModeSelect = document.getElementById('fit-mode');
+        const zoomSlider = document.getElementById('zoom-slider');
+        
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        const placeholder = document.getElementById('preview-placeholder');
+        const helperText = document.getElementById('helper-text');
+        const thumbnailGallery = document.getElementById('thumbnail-gallery');
+        
         const btnDownload = document.getElementById('btn-download');
         const btnDownloadAll = document.getElementById('btn-download-all');
-        const placeholder = document.getElementById('preview-placeholder');
         const fileCountTxt = document.getElementById('file-count');
         const statusMsg = document.getElementById('status-message');
 
         let frameImg = new Image();
-        let bgFiles = [];       // Array to hold multiple user images
-        let currentBgImg = null; // The currently previewed image
+        
+        // Data structure to hold images and their individual adjustment settings
+        let imageItems = []; 
+        let currentIndex = -1; // Tracks which image is currently being edited
+
+        // Dragging variables
+        let isDragging = false;
+        let startX, startY;
 
         // Initialize default frame
         frameImg.src = './frame.png'; 
@@ -21,6 +264,8 @@
             canvas.height = frameImg.height;
             drawCanvas();
         };
+
+        // --- UPLOADS ---
 
         // 1. Handle Custom Frame Upload
         frameInput.addEventListener('change', (e) => {
@@ -42,133 +287,237 @@
 
         // 2. Handle Background Image(s) Upload
         bgInput.addEventListener('change', (e) => {
-            bgFiles = Array.from(e.target.files);
-            if (bgFiles.length === 0) return;
+            const files = Array.from(e.target.files);
+            if (files.length === 0) return;
 
-            fileCountTxt.textContent = `${bgFiles.length} file(s) selected`;
+            // Reset current data
+            imageItems = [];
+            thumbnailGallery.innerHTML = '';
+            fileCountTxt.textContent = `${files.length} file(s) selected`;
+            btnDownloadAll.style.display = files.length > 1 ? 'block' : 'none';
+            btnDownload.disabled = false;
             
-            // Toggle Bulk Download Button
-            if (bgFiles.length > 1) {
-                btnDownloadAll.style.display = 'block';
-            } else {
-                btnDownloadAll.style.display = 'none';
-            }
+            placeholder.style.display = 'none';
+            canvas.style.display = 'block';
+            helperText.style.display = 'block';
 
-            // Load the first image for preview
-            loadPreviewImage(bgFiles[0]);
+            // Process each file
+            files.forEach((file, index) => {
+                const imgUrl = URL.createObjectURL(file);
+                const imgElement = new Image();
+                imgElement.src = imgUrl;
+
+                // Create settings object for this specific image
+                const itemData = {
+                    file: file,
+                    img: imgElement,
+                    originalName: file.name,
+                    offsetX: 0,
+                    offsetY: 0,
+                    scale: 1
+                };
+                imageItems.push(itemData);
+
+                // Create Thumbnail HTML
+                const thumb = document.createElement('img');
+                thumb.src = imgUrl;
+                thumb.className = 'thumbnail';
+                thumb.onclick = () => selectImage(index);
+                thumbnailGallery.appendChild(thumb);
+
+                // Once the first image loads, select it automatically
+                if (index === 0) {
+                    imgElement.onload = () => selectImage(0);
+                }
+            });
         });
 
-        // 3. Handle Fit Mode Changes
-        fitModeSelect.addEventListener('change', drawCanvas);
+        // --- INTERACTIVITY ---
 
-        // Function to load an image object from a File
-        function loadPreviewImage(file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                currentBgImg = new Image();
-                currentBgImg.onload = () => {
-                    btnDownload.disabled = false;
-                    drawCanvas();
-                };
-                currentBgImg.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
+        // Select an image from thumbnails
+        function selectImage(index) {
+            currentIndex = index;
+            
+            // Update active styling on thumbnails
+            const thumbs = document.querySelectorAll('.thumbnail');
+            thumbs.forEach((t, i) => t.classList.toggle('active', i === index));
+
+            // Sync the zoom slider with this image's specific settings
+            zoomSlider.value = imageItems[currentIndex].scale;
+            
+            drawCanvas();
         }
 
-        // Core Drawing Engine
-        function drawCanvas(bgImageToDraw = currentBgImg, targetCanvas = canvas) {
-            if (!frameImg.width) return;
-            placeholder.style.display = 'none';
+        // Handle Controls Changing
+        fitModeSelect.addEventListener('change', drawCanvas);
+        
+        zoomSlider.addEventListener('input', (e) => {
+            if (currentIndex === -1) return;
+            imageItems[currentIndex].scale = parseFloat(e.target.value);
+            drawCanvas();
+        });
+
+        // --- MOUSE & TOUCH DRAGGING ---
+        
+        canvas.addEventListener('mousedown', startDrag);
+        canvas.addEventListener('mousemove', drag);
+        window.addEventListener('mouseup', endDrag); // Window catches release outside canvas
+
+        canvas.addEventListener('touchstart', (e) => startDrag(e.touches[0]), {passive: false});
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Stop page scrolling when dragging on canvas
+            drag(e.touches[0]);
+        }, {passive: false});
+        window.addEventListener('touchend', endDrag);
+
+        function startDrag(e) {
+            if (currentIndex === -1) return;
+            isDragging = true;
+            
+            // Calculate CSS scaling (difference between actual canvas size and displayed size)
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            // Store starting position, minus existing offsets
+            const currentItem = imageItems[currentIndex];
+            startX = (e.clientX * scaleX) - currentItem.offsetX;
+            startY = (e.clientY * scaleY) - currentItem.offsetY;
+        }
+
+        function drag(e) {
+            if (!isDragging || currentIndex === -1) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            // Calculate new offset
+            const currentItem = imageItems[currentIndex];
+            currentItem.offsetX = (e.clientX * scaleX) - startX;
+            currentItem.offsetY = (e.clientY * scaleY) - startY;
+            
+            drawCanvas();
+        }
+
+        function endDrag() {
+            isDragging = false;
+        }
+
+
+        // --- DRAWING ENGINE ---
+
+        function drawCanvas(targetCanvas = canvas, targetIndex = currentIndex) {
+            if (!frameImg.width || targetIndex === -1 || !imageItems[targetIndex]) return;
             
             const context = targetCanvas.getContext('2d');
             const cw = targetCanvas.width;
             const ch = targetCanvas.height;
             const fitMode = fitModeSelect.value;
+            const item = imageItems[targetIndex];
+            const bgImg = item.img;
 
-            // Clear canvas and fill with a white background for JPEG compatibility
+            // 1. Clear & Fill White Background (Crucial for JPEG)
             context.clearRect(0, 0, cw, ch);
             context.fillStyle = "#ffffff";
             context.fillRect(0, 0, cw, ch);
             
-            // Draw background if exists
-            if (bgImageToDraw) {
-                const iw = bgImageToDraw.width;
-                const ih = bgImageToDraw.height;
-                let x = 0, y = 0, drawWidth = cw, drawHeight = ch;
+            // 2. Calculate Background Size & Position
+            if (bgImg && bgImg.width) {
+                const iw = bgImg.width;
+                const ih = bgImg.height;
+                let baseScale = 1;
 
                 if (fitMode === 'cover') {
-                    const scale = Math.max(cw / iw, ch / ih);
-                    drawWidth = iw * scale;
-                    drawHeight = ih * scale;
+                    baseScale = Math.max(cw / iw, ch / ih);
+                } else if (fitMode === 'contain') {
+                    baseScale = Math.min(cw / iw, ch / ih);
+                } else if (fitMode === 'stretch') {
+                    baseScale = 1; // Handled differently below
+                }
+
+                let drawWidth = cw;
+                let drawHeight = ch;
+                let x = 0;
+                let y = 0;
+
+                if (fitMode !== 'stretch') {
+                    // Apply zoom slider scale on top of base scale
+                    const finalScale = baseScale * item.scale;
+                    drawWidth = iw * finalScale;
+                    drawHeight = ih * finalScale;
+                    
+                    // Center the image initially
                     x = (cw - drawWidth) / 2;
                     y = (ch - drawHeight) / 2;
-                } else if (fitMode === 'contain') {
-                    const scale = Math.min(cw / iw, ch / ih);
-                    drawWidth = iw * scale;
-                    drawHeight = ih * scale;
+                } else {
+                    // If stretch, respect zoom but start from full canvas bounds
+                    drawWidth = cw * item.scale;
+                    drawHeight = ch * item.scale;
                     x = (cw - drawWidth) / 2;
                     y = (ch - drawHeight) / 2;
                 }
-                // If stretch, x=0, y=0, drawWidth=cw, drawHeight=ch (default values)
 
-                context.drawImage(bgImageToDraw, x, y, drawWidth, drawHeight);
+                // Apply the Drag Offsets
+                x += item.offsetX;
+                y += item.offsetY;
+
+                // Draw the User Image
+                context.drawImage(bgImg, x, y, drawWidth, drawHeight);
             }
 
-            // Draw frame on top
+            // 3. Draw Frame on Top
             context.drawImage(frameImg, 0, 0, cw, ch);
         }
 
-        // Download Single (Now JPEG at 90% quality)
+
+        // --- DOWNLOADING ---
+
+        // Download Single
         btnDownload.addEventListener('click', () => {
+            if (currentIndex === -1) return;
             const dataUrl = canvas.toDataURL('image/jpeg', 0.90); 
             const link = document.createElement('a');
-            link.download = `framed-${bgFiles[0]?.name.split('.')[0] || 'photo'}.jpg`;
+            const ogName = imageItems[currentIndex].originalName.split('.')[0];
+            link.download = `framed-${ogName}.jpg`;
             link.href = dataUrl;
             link.click();
         });
 
-        // Download All (Bulk Zip Generation - Now JPEG at 90% quality)
+        // Download All (ZIP)
         btnDownloadAll.addEventListener('click', async () => {
-            statusMsg.textContent = "Processing images... please wait.";
+            if (imageItems.length === 0) return;
+            
+            statusMsg.textContent = "Processing and applying adjustments... please wait.";
             btnDownloadAll.disabled = true;
             btnDownload.disabled = true;
 
             const zip = new JSZip();
             const imgFolder = zip.folder("Framed_Photos");
             
-            // Offscreen canvas for background processing
-            const offScreenCanvas = document.createElement('canvas');
-            offScreenCanvas.width = frameImg.width;
-            offScreenCanvas.height = frameImg.height;
+            // Create a temporary hidden canvas for processing
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = frameImg.width;
+            offCanvas.height = frameImg.height;
 
-            for (let i = 0; i < bgFiles.length; i++) {
-                statusMsg.textContent = `Processing image ${i + 1} of ${bgFiles.length}...`;
+            // Loop through ALL items and draw them using their specific settings
+            for (let i = 0; i < imageItems.length; i++) {
+                statusMsg.textContent = `Rendering image ${i + 1} of ${imageItems.length}...`;
                 
-                // Convert file to Image object
-                const img = await new Promise((resolve) => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        const tempImg = new Image();
-                        tempImg.onload = () => resolve(tempImg);
-                        tempImg.src = e.target.result;
-                    };
-                    reader.readAsDataURL(bgFiles[i]);
-                });
+                // Draw this specific item to the offscreen canvas
+                drawCanvas(offCanvas, i);
 
-                // Draw to offscreen canvas
-                drawCanvas(img, offScreenCanvas);
-
-                // Convert canvas to Blob (JPEG format)
-                const blob = await new Promise(resolve => offScreenCanvas.toBlob(resolve, 'image/jpeg', 0.90));
+                // Convert to Blob
+                const blob = await new Promise(resolve => offCanvas.toBlob(resolve, 'image/jpeg', 0.90));
                 
-                // Add to zip
-                const originalName = bgFiles[i].name.split('.')[0];
+                // Add to Zip
+                const originalName = imageItems[i].originalName.split('.')[0];
                 imgFolder.file(`framed_${originalName}.jpg`, blob);
             }
 
             statusMsg.textContent = "Zipping files... almost done!";
             
-            // Generate Zip and trigger download
+            // Generate Zip
             zip.generateAsync({ type: "blob" }).then(function(content) {
                 saveAs(content, "Summer_Conclave_Photos.zip");
                 statusMsg.textContent = "Download complete!";
@@ -179,3 +528,5 @@
             });
         });
     </script>
+</body>
+</html>
