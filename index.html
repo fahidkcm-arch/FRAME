@@ -97,11 +97,11 @@
 
         canvas {
             max-width: 100%;
-            max-height: 600px;
+            max-height: 55vh; /* Prevents canvas from becoming too tall */
             object-fit: contain;
             border-radius: 4px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            cursor: grab; /* Indicates image can be dragged */
+            cursor: grab;
             margin: 0 auto;
             display: block;
         }
@@ -112,16 +112,19 @@
             font-size: 0.85rem;
             color: var(--text-muted);
             margin-top: 10px;
-            display: none; /* Shown via JS when active */
+            display: none; 
         }
 
-        /* Thumbnail Gallery */
+        /* Thumbnail Gallery (Optimized Layout) */
         .thumbnail-gallery {
             display: flex;
+            flex-wrap: wrap; 
+            justify-content: center; 
             gap: 10px;
-            overflow-x: auto;
             padding: 10px 5px;
             margin-top: 15px;
+            max-height: 250px; 
+            overflow-y: auto; 
         }
         
         .thumbnail {
@@ -248,12 +251,8 @@
         const statusMsg = document.getElementById('status-message');
 
         let frameImg = new Image();
-        
-        // Data structure to hold images and their individual adjustment settings
         let imageItems = []; 
-        let currentIndex = -1; // Tracks which image is currently being edited
-
-        // Dragging variables
+        let currentIndex = -1; 
         let isDragging = false;
         let startX, startY;
 
@@ -264,8 +263,6 @@
             canvas.height = frameImg.height;
             drawCanvas();
         };
-
-        // --- UPLOADS ---
 
         // 1. Handle Custom Frame Upload
         frameInput.addEventListener('change', (e) => {
@@ -285,12 +282,11 @@
             reader.readAsDataURL(file);
         });
 
-        // 2. Handle Background Image(s) Upload
+        // 2. Handle Background Image(s) Upload (LAZY LOADING)
         bgInput.addEventListener('change', (e) => {
             const files = Array.from(e.target.files);
             if (files.length === 0) return;
 
-            // Reset current data
             imageItems = [];
             thumbnailGallery.innerHTML = '';
             fileCountTxt.textContent = `${files.length} file(s) selected`;
@@ -301,16 +297,13 @@
             canvas.style.display = 'block';
             helperText.style.display = 'block';
 
-            // Process each file
             files.forEach((file, index) => {
                 const imgUrl = URL.createObjectURL(file);
-                const imgElement = new Image();
-                imgElement.src = imgUrl;
 
-                // Create settings object for this specific image
                 const itemData = {
                     file: file,
-                    img: imgElement,
+                    imgUrl: imgUrl, 
+                    img: null, 
                     originalName: file.name,
                     offsetX: 0,
                     offsetY: 0,
@@ -324,28 +317,33 @@
                 thumb.className = 'thumbnail';
                 thumb.onclick = () => selectImage(index);
                 thumbnailGallery.appendChild(thumb);
-
-                // Once the first image loads, select it automatically
-                if (index === 0) {
-                    imgElement.onload = () => selectImage(0);
-                }
             });
-        });
 
-        // --- INTERACTIVITY ---
+            // Select first image immediately
+            if (files.length > 0) selectImage(0);
+        });
 
         // Select an image from thumbnails
         function selectImage(index) {
             currentIndex = index;
             
-            // Update active styling on thumbnails
             const thumbs = document.querySelectorAll('.thumbnail');
             thumbs.forEach((t, i) => t.classList.toggle('active', i === index));
 
-            // Sync the zoom slider with this image's specific settings
-            zoomSlider.value = imageItems[currentIndex].scale;
-            
-            drawCanvas();
+            const currentItem = imageItems[currentIndex];
+            zoomSlider.value = currentItem.scale;
+
+            // Load full image only if not already loaded
+            if (!currentItem.img) {
+                const newImg = new Image();
+                newImg.onload = () => {
+                    currentItem.img = newImg;
+                    drawCanvas();
+                };
+                newImg.src = currentItem.imgUrl;
+            } else {
+                drawCanvas(); 
+            }
         }
 
         // Handle Controls Changing
@@ -358,28 +356,25 @@
         });
 
         // --- MOUSE & TOUCH DRAGGING ---
-        
         canvas.addEventListener('mousedown', startDrag);
         canvas.addEventListener('mousemove', drag);
-        window.addEventListener('mouseup', endDrag); // Window catches release outside canvas
+        window.addEventListener('mouseup', endDrag);
 
         canvas.addEventListener('touchstart', (e) => startDrag(e.touches[0]), {passive: false});
         canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault(); // Stop page scrolling when dragging on canvas
+            e.preventDefault(); 
             drag(e.touches[0]);
         }, {passive: false});
         window.addEventListener('touchend', endDrag);
 
         function startDrag(e) {
-            if (currentIndex === -1) return;
+            if (currentIndex === -1 || !imageItems[currentIndex].img) return;
             isDragging = true;
             
-            // Calculate CSS scaling (difference between actual canvas size and displayed size)
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
 
-            // Store starting position, minus existing offsets
             const currentItem = imageItems[currentIndex];
             startX = (e.clientX * scaleX) - currentItem.offsetX;
             startY = (e.clientY * scaleY) - currentItem.offsetY;
@@ -392,7 +387,6 @@
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
 
-            // Calculate new offset
             const currentItem = imageItems[currentIndex];
             currentItem.offsetX = (e.clientX * scaleX) - startX;
             currentItem.offsetY = (e.clientY * scaleY) - startY;
@@ -404,9 +398,7 @@
             isDragging = false;
         }
 
-
         // --- DRAWING ENGINE ---
-
         function drawCanvas(targetCanvas = canvas, targetIndex = currentIndex) {
             if (!frameImg.width || targetIndex === -1 || !imageItems[targetIndex]) return;
             
@@ -417,12 +409,11 @@
             const item = imageItems[targetIndex];
             const bgImg = item.img;
 
-            // 1. Clear & Fill White Background (Crucial for JPEG)
+            // Clear & Fill White Background (Crucial for JPEG)
             context.clearRect(0, 0, cw, ch);
             context.fillStyle = "#ffffff";
             context.fillRect(0, 0, cw, ch);
             
-            // 2. Calculate Background Size & Position
             if (bgImg && bgImg.width) {
                 const iw = bgImg.width;
                 const ih = bgImg.height;
@@ -433,7 +424,7 @@
                 } else if (fitMode === 'contain') {
                     baseScale = Math.min(cw / iw, ch / ih);
                 } else if (fitMode === 'stretch') {
-                    baseScale = 1; // Handled differently below
+                    baseScale = 1; 
                 }
 
                 let drawWidth = cw;
@@ -442,40 +433,31 @@
                 let y = 0;
 
                 if (fitMode !== 'stretch') {
-                    // Apply zoom slider scale on top of base scale
                     const finalScale = baseScale * item.scale;
                     drawWidth = iw * finalScale;
                     drawHeight = ih * finalScale;
-                    
-                    // Center the image initially
                     x = (cw - drawWidth) / 2;
                     y = (ch - drawHeight) / 2;
                 } else {
-                    // If stretch, respect zoom but start from full canvas bounds
                     drawWidth = cw * item.scale;
                     drawHeight = ch * item.scale;
                     x = (cw - drawWidth) / 2;
                     y = (ch - drawHeight) / 2;
                 }
 
-                // Apply the Drag Offsets
                 x += item.offsetX;
                 y += item.offsetY;
 
-                // Draw the User Image
                 context.drawImage(bgImg, x, y, drawWidth, drawHeight);
             }
 
-            // 3. Draw Frame on Top
+            // Draw Frame on Top
             context.drawImage(frameImg, 0, 0, cw, ch);
         }
 
-
         // --- DOWNLOADING ---
-
-        // Download Single
         btnDownload.addEventListener('click', () => {
-            if (currentIndex === -1) return;
+            if (currentIndex === -1 || !imageItems[currentIndex].img) return;
             const dataUrl = canvas.toDataURL('image/jpeg', 0.90); 
             const link = document.createElement('a');
             const ogName = imageItems[currentIndex].originalName.split('.')[0];
@@ -488,36 +470,40 @@
         btnDownloadAll.addEventListener('click', async () => {
             if (imageItems.length === 0) return;
             
-            statusMsg.textContent = "Processing and applying adjustments... please wait.";
+            statusMsg.textContent = "Processing images... please wait.";
             btnDownloadAll.disabled = true;
             btnDownload.disabled = true;
 
             const zip = new JSZip();
             const imgFolder = zip.folder("Framed_Photos");
             
-            // Create a temporary hidden canvas for processing
             const offCanvas = document.createElement('canvas');
             offCanvas.width = frameImg.width;
             offCanvas.height = frameImg.height;
 
-            // Loop through ALL items and draw them using their specific settings
             for (let i = 0; i < imageItems.length; i++) {
                 statusMsg.textContent = `Rendering image ${i + 1} of ${imageItems.length}...`;
                 
-                // Draw this specific item to the offscreen canvas
+                // Load right before drawing if not already loaded by user
+                if (!imageItems[i].img) {
+                    const tempImg = await new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = () => resolve(img);
+                        img.src = imageItems[i].imgUrl;
+                    });
+                    imageItems[i].img = tempImg;
+                }
+
                 drawCanvas(offCanvas, i);
 
-                // Convert to Blob
                 const blob = await new Promise(resolve => offCanvas.toBlob(resolve, 'image/jpeg', 0.90));
                 
-                // Add to Zip
                 const originalName = imageItems[i].originalName.split('.')[0];
                 imgFolder.file(`framed_${originalName}.jpg`, blob);
             }
 
             statusMsg.textContent = "Zipping files... almost done!";
             
-            // Generate Zip
             zip.generateAsync({ type: "blob" }).then(function(content) {
                 saveAs(content, "Summer_Conclave_Photos.zip");
                 statusMsg.textContent = "Download complete!";
